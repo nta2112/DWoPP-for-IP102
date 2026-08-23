@@ -29,14 +29,21 @@ def find_data_root(local_paths: List[str], env_var: str = None, kaggle_base: str
         if os.path.exists(path):
             return path
     
+    # Search all subdirectories in kaggle_base for dataset (JSON files)
     kaggle_inputs = glob.glob(os.path.join(kaggle_base, '*'))
     for kp in kaggle_inputs:
-        for lp in local_paths:
-            candidate = os.path.join(kp, os.path.basename(lp))
-            if os.path.exists(candidate):
-                return candidate
-            if os.path.exists(kp) and any(fname.endswith('.json') for fname in os.listdir(kp) if os.path.isfile(os.path.join(kp, fname))):
-                return kp
+        # Check if this directory directly contains JSON files
+        if os.path.isdir(kp):
+            try:
+                if any(fname.endswith('.json') for fname in os.listdir(kp) if os.path.isfile(os.path.join(kp, fname))):
+                    return kp
+            except (PermissionError, OSError):
+                pass
+            
+            # Check subdirectories
+            for root, dirs, files in os.walk(kp):
+                if any(fname.endswith('.json') for fname in files):
+                    return root
     
     raise FileNotFoundError(f"Could not find dataset. Tried: {local_paths}, env: {env_var}, kaggle: {kaggle_base}")
 
