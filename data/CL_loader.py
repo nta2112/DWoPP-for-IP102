@@ -3,6 +3,7 @@ from torch.utils.data import dataloader
 import numpy as np
 import random
 from data.CL_market import Market1501
+from data.ip102 import IP102
 from data.sampler import RandomSampler
 from data.random_erasing import RandomErasing
 import numpy
@@ -17,7 +18,7 @@ def seed_worker(worker_id):
 def make_dataloader(args, task_id, epoch=0):
     ######################
     gen = torch.Generator()
-    gen.manual_seed(args.manual_seed)
+    gen.manual_seed(int(args.manual_seed))
     #################
     train_list = [
         transforms.Resize((args.img_height, args.img_width), interpolation=3),
@@ -41,13 +42,18 @@ def make_dataloader(args, task_id, epoch=0):
         train_set = Market1501(args.dataset_root, train_transform, task_id=task_id,
                                split='train', ROOT_PATH=args.preprocess_data_path, 
                                dataset_name='market1501')
+    elif args.dataset == 'ip102':
+        train_set = IP102(args.dataset_root, train_transform, task_id=task_id,
+                          split='train', ROOT_PATH=args.preprocess_data_path,
+                          dataset_name='ip102',
+                          filtered_class_path=args.filtered_class_path,
+                          classes_txt_path=args.classes_txt_path)
     else:
         raise NotImplementedError
 
     ######## if torch version >= 1.6.0, we need generator to fix seed 
     ####### also GPU mode also makes difference
     if torch.__version__ >= '1.6.0':
-        # print(torch.__version__)
         train_loader = dataloader.DataLoader(train_set, sampler=RandomSampler(train_set, batch_k, CL_sign=True), \
                                             batch_size=batch_m * batch_k, \
                                             num_workers=args.num_workers, drop_last=True,

@@ -3,6 +3,7 @@ from torch.utils.data import dataloader
 import numpy as np
 import random
 from data.market1501 import Market1501
+from data.ip102 import IP102
 from data.sampler import RandomSampler
 from data.random_erasing import RandomErasing
 
@@ -30,6 +31,10 @@ def make_dataloader(args, epoch=0):
 
     if args.dataset == 'market1501':
         train_set = Market1501(args.dataset_root, train_transform, split='train')
+    elif args.dataset == 'ip102':
+        train_set = IP102(args.dataset_root, train_transform, split='train',
+                          filtered_class_path=args.filtered_class_path,
+                          classes_txt_path=args.classes_txt_path)
     else:
         raise NotImplementedError
 

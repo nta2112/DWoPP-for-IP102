@@ -18,6 +18,16 @@ def get_parser():
                         help='path to store models and logs',
                         default=f'dmml/market1501')
 
+    parser.add_argument('--filtered_class_path',
+                        type=str,
+                        help='path to filtered_class.txt for IP102',
+                        default=None)
+
+    parser.add_argument('--classes_txt_path',
+                        type=str,
+                        help='path to classes.txt for IP102',
+                        default=None)
+
     parser.add_argument('--num_epochs',
                         type=int,
                         help='number of training epochs',

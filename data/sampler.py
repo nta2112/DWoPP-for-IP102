@@ -1,14 +1,14 @@
-from torch.utils.data import sampler
+from torch.utils.data import Sampler
 import random
 from collections import defaultdict
 
 
-class RandomSampler(sampler.Sampler):
+class RandomSampler(Sampler):
     def __init__(self, data_source, batch_k, CL_sign=False):
-        super(RandomSampler, self).__init__(data_source)
+        super().__init__()
         self.data_source = data_source
         self.batch_k = batch_k
-        self.CL_sign=CL_sign
+        self.CL_sign = CL_sign
 
         self._id2index = defaultdict(list)
         if hasattr(data_source, 'imgs'):
