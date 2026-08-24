@@ -115,12 +115,20 @@ def train(args, model, optimizer, criterion, task_id, gids=None, old_model=None,
 
         if epoch % 10 == 0:
             dataloader = make_dataloader(args, task_id, epoch)
+        
+        # Debug: check dataloader
+        print(f'Dataloader length: {len(dataloader)}')
+        print(f'Batch size: {dataloader.batch_size}')
 
         print('=== Epoch {}/{} ==='.format(epoch, args.num_epochs))
         if args.num_epochs > 1:
             adjust_lr_exp(optimizer, args.lr, epoch, args.num_epochs, args.lr_decay_start_epoch)
         
+        iter_count = 0
         for iteration, (image, label) in enumerate(dataloader):
+            iter_count += 1
+            if iter_count == 1:
+                print(f'First batch: image shape={image.shape}, label shape={label.shape}')
             if args.cuda:
                 image, label = image.cuda(gids[0]), label.cuda(gids[0])
             feat = model(image)
@@ -221,6 +229,7 @@ def train(args, model, optimizer, criterion, task_id, gids=None, old_model=None,
         avg_dmml_losses = np.mean(dmml_losses) if dmml_losses else float('nan')
         avg_know_distill_losses = np.mean(know_distill_losses) if know_distill_losses else float('nan')
 
+        print(f'Completed iterations: {len(train_loss)}')
         print('Average loss: {:.6f}, dmml_losses: {:.6f}, know_distill_losses: {:.6f}'
               .format(avg_training_loss, avg_dmml_losses, avg_know_distill_losses))
         t = int(time.time())
