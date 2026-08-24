@@ -122,6 +122,11 @@ def train(args, model, optimizer, criterion, task_id, gids=None, old_model=None,
             feat = model(image)
 
             dmml_loss = criterion(feat, label)
+            
+            # Check for NaN
+            if torch.isnan(dmml_loss):
+                print(f'WARNING: NaN dmml_loss detected at iteration {iteration}')
+                continue
 
             if task_id > 0 and args.weight_knowledge_distill > 0:
                 feat_old_model = old_model(image)
@@ -178,12 +183,27 @@ def train(args, model, optimizer, criterion, task_id, gids=None, old_model=None,
                 kl_div_mix_task = (mix_task_old_logits.clamp(min=1e-4) * (mix_task_old_logits.clamp(min=1e-4)
                                 / mix_task_new_logits.clamp(min=1e-4)).log()).sum() / len(mix_task_old_logits)
                 kl_div_mix_task = kl_div_mix_task * args.weight_knowledge_distill
+                
+                # Check for NaN in distillation loss
+                if torch.isnan(kl_div_mix_task):
+                    print(f'WARNING: NaN kl_div_mix_task detected at iteration {iteration}')
+                    kl_div_mix_task = torch.tensor(0.0).cuda(gids[0]) if gids else torch.tensor(0.0)
             else:
                 kl_div_mix_task = torch.tensor(0.0).cuda(gids[0]) if gids else torch.tensor(0.0)
 
             loss = dmml_loss + kl_div_mix_task
+            
+            # Check for NaN in total loss
+            if torch.isnan(loss):
+                print(f'WARNING: NaN total loss detected at iteration {iteration}')
+                continue
+                
             optimizer.zero_grad()
             loss.backward()
+            
+            # Gradient clipping for stability
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            
             optimizer.step()
 
             train_loss.append(loss.item())

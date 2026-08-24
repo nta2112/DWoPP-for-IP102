@@ -36,12 +36,12 @@ def get_parser():
     parser.add_argument('--lr',
                         type=float,
                         help='learning rate',
-                        default=2e-4)
+                        default=1e-4)
 
     parser.add_argument('--lr_decay_start_epoch',
                         type=int,
                         help='epoch from when learning rate starts to decay exponentially',
-                        default=300)
+                        default=0)
 
     parser.add_argument('--weight_decay',
                         type=float,
@@ -77,7 +77,7 @@ def get_parser():
     parser.add_argument('--margin',
                         type=float_or_string,
                         help='margin parameter for contrastive loss, triplet loss or DMML loss',
-                        default=0.4)
+                        default=0.2)
 
     parser.add_argument('--img_height',
                         type=int,
@@ -156,12 +156,12 @@ def get_parser():
     ######################################################
     parser.add_argument('--dmml_dist_metric',
                         type=str,
-                        default='euclidean',
+                        default='cosine',
                         choices=['cosine','euclidean'])
 
     parser.add_argument('--distillation_dist_metric',
                         type=str,
-                        default='euclidean',
+                        default='cosine',
                         choices=['cosine','euclidean'])
                         
     parser.add_argument('--bnneck',
