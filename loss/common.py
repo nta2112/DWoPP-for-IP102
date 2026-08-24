@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 
 
 def euclidean_dist(x, y, squared=True):
@@ -34,9 +35,14 @@ def cosine_dist(x, y):
     if d != y.size(1):
         raise Exception('Invalid input shape.')
 
-    x = x.unsqueeze(1).expand(n, m, d)
-    y = y.unsqueeze(0).expand(n, m, d)
-    dist = -torch.mul(x, y).sum(2)
+    # Normalize features for cosine similarity
+    x_norm = F.normalize(x, p=2, dim=1)
+    y_norm = F.normalize(y, p=2, dim=1)
+
+    x_norm = x_norm.unsqueeze(1).expand(n, m, d)
+    y_norm = y_norm.unsqueeze(0).expand(n, m, d)
+    cos_sim = torch.mul(x_norm, y_norm).sum(2)
+    dist = 1.0 - cos_sim  # Cosine distance in [0, 2]
 
     return dist
 
