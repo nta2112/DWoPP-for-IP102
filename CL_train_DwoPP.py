@@ -52,6 +52,7 @@ def extract_features(model, dataloader, gids=None, normalize=True):
     model.eval()
     all_feats = []
     all_labels = []
+    all_ids = []
     with torch.no_grad():
         for images, labels in dataloader:
             if gids is not None:
@@ -61,7 +62,12 @@ def extract_features(model, dataloader, gids=None, normalize=True):
                 feats = F.normalize(feats, p=2, dim=1)
             all_feats.append(feats.cpu())
             all_labels.append(labels)
-    return torch.cat(all_feats), torch.cat(all_labels)
+            if hasattr(dataloader.dataset, 'img_ids'):
+                batch_ids = [dataloader.dataset.img_ids[i] for i in range(len(all_feats[-1]))]
+                all_ids.extend(batch_ids)
+    if all_ids:
+        return torch.cat(all_feats), torch.cat(all_labels), np.array(all_ids)
+    return torch.cat(all_feats), torch.cat(all_labels), None
 
 
 def build_eval_loaders(args, task_id, seen_classes, gids=None):
@@ -75,10 +81,10 @@ def build_eval_loaders(args, task_id, seen_classes, gids=None):
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
     
-    gallery_set = IP102(args.dataset_root, eval_transform, split='gallery',
+    gallery_set = IP102(args.dataset_root, eval_transform, split='val',
                          filtered_class_path=args.filtered_class_path,
                          classes_txt_path=args.classes_txt_path)
-    query_set = IP102(args.dataset_root, eval_transform, split='query',
+    query_set = IP102(args.dataset_root, eval_transform, split='test',
                        filtered_class_path=args.filtered_class_path,
                        classes_txt_path=args.classes_txt_path)
     
@@ -207,11 +213,12 @@ def train(args, model, optimizer, criterion, task_id, gids=None, old_model=None,
         seen_classes.extend(args.task_classes[t])
     
     gallery_loader, query_loader, gallery_set, query_set = build_eval_loaders(args, task_id, seen_classes, gids)
-    gallery_feats, gallery_labels = extract_features(model, gallery_loader, gids)
-    query_feats, query_labels = extract_features(model, query_loader, gids)
+    gallery_feats, gallery_labels, gallery_ids = extract_features(model, gallery_loader, gids)
+    query_feats, query_labels, query_ids = extract_features(model, query_loader, gids)
 
     metrics = evaluate_retrieval(query_feats, gallery_feats, query_labels, gallery_labels,
-                                  seen_classes=seen_classes)
+                                  seen_classes=seen_classes,
+                                  query_ids=query_ids, gallery_ids=gallery_ids)
     
     if all_task_maps is not None:
         all_task_maps.append([metrics['mAP']])

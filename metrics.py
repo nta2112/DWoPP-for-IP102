@@ -10,19 +10,33 @@ warnings.filterwarnings('ignore')
 
 def compute_recall_at_k(query_feats: np.ndarray, gallery_feats: np.ndarray,
                         query_labels: np.ndarray, gallery_labels: np.ndarray,
-                        ks: List[int] = [1, 5, 10]) -> Dict[int, float]:
+                        ks: List[int] = [1, 5, 10],
+                        query_ids: Optional[np.ndarray] = None,
+                        gallery_ids: Optional[np.ndarray] = None) -> Dict[int, float]:
     num_query = query_feats.shape[0]
     num_gallery = gallery_feats.shape[0]
     
     sim = query_feats @ gallery_feats.T
     indices = np.argsort(-sim, axis=1)
     
+    exclude_self = (query_ids is not None and gallery_ids is not None)
+    if exclude_self:
+        gallery_id_to_idx = {gid: idx for idx, gid in enumerate(gallery_ids)}
+    
     results = {k: 0.0 for k in ks}
     
     for i in range(num_query):
         q_label = query_labels[i]
+        if exclude_self:
+            q_id = query_ids[i]
+            exclude_idx = gallery_id_to_idx.get(q_id, -1)
+        
         for k in ks:
             top_k_indices = indices[i, :k]
+            if exclude_self and exclude_idx != -1:
+                top_k_indices = top_k_indices[top_k_indices != exclude_idx]
+                if len(top_k_indices) > k:
+                    top_k_indices = top_k_indices[:k]
             top_k_labels = gallery_labels[top_k_indices]
             if q_label in top_k_labels:
                 results[k] += 1.0
@@ -34,13 +48,19 @@ def compute_recall_at_k(query_feats: np.ndarray, gallery_feats: np.ndarray,
 
 
 def compute_map_macro(query_feats: np.ndarray, gallery_feats: np.ndarray,
-                      query_labels: np.ndarray, gallery_labels: np.ndarray) -> float:
+                      query_labels: np.ndarray, gallery_labels: np.ndarray,
+                      query_ids: Optional[np.ndarray] = None,
+                      gallery_ids: Optional[np.ndarray] = None) -> float:
     num_query = query_feats.shape[0]
     num_gallery = gallery_feats.shape[0]
     unique_labels = np.unique(query_labels)
     
     sim = query_feats @ gallery_feats.T
     indices = np.argsort(-sim, axis=1)
+    
+    exclude_self = (query_ids is not None and gallery_ids is not None)
+    if exclude_self:
+        gallery_id_to_idx = {gid: idx for idx, gid in enumerate(gallery_ids)}
     
     aps = []
     for i in range(num_query):
@@ -49,9 +69,16 @@ def compute_map_macro(query_feats: np.ndarray, gallery_feats: np.ndarray,
         if relevant.sum() == 0:
             continue
         
-        ranked_relevant = relevant[indices[i]]
+        ranked_indices = indices[i]
+        if exclude_self:
+            q_id = query_ids[i]
+            exclude_idx = gallery_id_to_idx.get(q_id, -1)
+            if exclude_idx != -1:
+                ranked_indices = ranked_indices[ranked_indices != exclude_idx]
+        
+        ranked_relevant = relevant[ranked_indices]
         cumsum = np.cumsum(ranked_relevant)
-        precision = cumsum / (np.arange(num_gallery) + 1)
+        precision = cumsum / (np.arange(len(ranked_indices)) + 1)
         ap = (precision * ranked_relevant).sum() / relevant.sum()
         aps.append(ap)
     
@@ -70,7 +97,9 @@ def compute_map_macro(query_feats: np.ndarray, gallery_feats: np.ndarray,
 
 def compute_ood_metrics(query_feats: np.ndarray, gallery_feats: np.ndarray,
                         query_labels: np.ndarray, gallery_labels: np.ndarray,
-                        seen_classes: List[int]) -> Dict[str, Optional[float]]:
+                        seen_classes: List[int],
+                        query_ids: Optional[np.ndarray] = None,
+                        gallery_ids: Optional[np.ndarray] = None) -> Dict[str, Optional[float]]:
     unseen_classes = [c for c in np.unique(query_labels) if c not in seen_classes]
     
     if len(unseen_classes) == 0:
@@ -86,6 +115,10 @@ def compute_ood_metrics(query_feats: np.ndarray, gallery_feats: np.ndarray,
     
     sim = query_feats @ gallery_feats.T
     
+    exclude_self = (query_ids is not None and gallery_ids is not None)
+    if exclude_self:
+        gallery_id_to_idx = {gid: idx for idx, gid in enumerate(gallery_ids)}
+    
     is_seen = np.array([q in seen_classes for q in query_labels])
     is_unseen = ~is_seen
     
@@ -95,7 +128,13 @@ def compute_ood_metrics(query_feats: np.ndarray, gallery_feats: np.ndarray,
         correct = 0
         for i in seen_indices:
             q_label = query_labels[i]
-            best_idx = np.argmax(sim[i])
+            row_sim = sim[i].copy()
+            if exclude_self:
+                q_id = query_ids[i]
+                exclude_idx = gallery_id_to_idx.get(q_id, -1)
+                if exclude_idx != -1:
+                    row_sim[exclude_idx] = -np.inf
+            best_idx = np.argmax(row_sim)
             if gallery_labels[best_idx] == q_label:
                 correct += 1
         recall_seen = correct / len(seen_indices)
@@ -106,7 +145,13 @@ def compute_ood_metrics(query_feats: np.ndarray, gallery_feats: np.ndarray,
         correct = 0
         for i in unseen_indices:
             q_label = query_labels[i]
-            best_idx = np.argmax(sim[i])
+            row_sim = sim[i].copy()
+            if exclude_self:
+                q_id = query_ids[i]
+                exclude_idx = gallery_id_to_idx.get(q_id, -1)
+                if exclude_idx != -1:
+                    row_sim[exclude_idx] = -np.inf
+            best_idx = np.argmax(row_sim)
             if gallery_labels[best_idx] == q_label:
                 correct += 1
         recall_unseen = correct / len(unseen_indices)
@@ -165,7 +210,9 @@ def compute_lifelong_metrics(task_maps: List[List[float]]) -> Tuple[float, float
 
 def evaluate_retrieval(query_feats: torch.Tensor, gallery_feats: torch.Tensor,
                        query_labels: torch.Tensor, gallery_labels: torch.Tensor,
-                       seen_classes: List[int] = None, ks: List[int] = [1, 5, 10]) -> Dict:
+                       seen_classes: List[int] = None, ks: List[int] = [1, 5, 10],
+                       query_ids: Optional[np.ndarray] = None,
+                       gallery_ids: Optional[np.ndarray] = None) -> Dict:
     query_feats = query_feats.cpu().numpy() if isinstance(query_feats, torch.Tensor) else query_feats
     gallery_feats = gallery_feats.cpu().numpy() if isinstance(gallery_feats, torch.Tensor) else gallery_feats
     query_labels = query_labels.cpu().numpy() if isinstance(query_labels, torch.Tensor) else query_labels
@@ -174,8 +221,10 @@ def evaluate_retrieval(query_feats: torch.Tensor, gallery_feats: torch.Tensor,
     query_feats = query_feats / (np.linalg.norm(query_feats, axis=1, keepdims=True) + 1e-8)
     gallery_feats = gallery_feats / (np.linalg.norm(gallery_feats, axis=1, keepdims=True) + 1e-8)
     
-    recall_results = compute_recall_at_k(query_feats, gallery_feats, query_labels, gallery_labels, ks)
-    map_macro = compute_map_macro(query_feats, gallery_feats, query_labels, gallery_labels)
+    recall_results = compute_recall_at_k(query_feats, gallery_feats, query_labels, gallery_labels, ks,
+                                          query_ids=query_ids, gallery_ids=gallery_ids)
+    map_macro = compute_map_macro(query_feats, gallery_feats, query_labels, gallery_labels,
+                                   query_ids=query_ids, gallery_ids=gallery_ids)
     
     results = {
         'R@1': recall_results.get(1, 0.0),
@@ -185,7 +234,8 @@ def evaluate_retrieval(query_feats: torch.Tensor, gallery_feats: torch.Tensor,
     }
     
     if seen_classes is not None:
-        ood_results = compute_ood_metrics(query_feats, gallery_feats, query_labels, gallery_labels, seen_classes)
+        ood_results = compute_ood_metrics(query_feats, gallery_feats, query_labels, gallery_labels, seen_classes,
+                                           query_ids=query_ids, gallery_ids=gallery_ids)
         results.update(ood_results)
     
     return results

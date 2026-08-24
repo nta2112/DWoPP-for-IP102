@@ -124,6 +124,40 @@ class TestMetrics(unittest.TestCase):
         self.assertAlmostEqual(results['R@1'], 1.0, places=2)
         self.assertAlmostEqual(results['mAP'], 1.0, places=2)
 
+    def test_self_exclusion(self):
+        """Test that self-matches are excluded when query_ids and gallery_ids are provided."""
+        n = 50
+        d = 128
+        np.random.seed(42)
+        
+        query_feats = np.random.randn(n, d).astype(np.float32)
+        query_feats = query_feats / np.linalg.norm(query_feats, axis=1, keepdims=True)
+        gallery_feats = query_feats.copy()
+        
+        query_labels = np.arange(n)
+        gallery_labels = np.arange(n)
+        
+        query_ids = np.arange(n)
+        gallery_ids = np.arange(n)
+        
+        results = compute_recall_at_k(query_feats, gallery_feats, query_labels, gallery_labels, 
+                                       ks=[1, 5, 10], query_ids=query_ids, gallery_ids=gallery_ids)
+        
+        self.assertAlmostEqual(results[1], 0.0, places=2)
+        self.assertAlmostEqual(results[5], 0.0, places=2)
+        self.assertAlmostEqual(results[10], 0.0, places=2)
+        
+        map_score = compute_map_macro(query_feats, gallery_feats, query_labels, gallery_labels,
+                                       query_ids=query_ids, gallery_ids=gallery_ids)
+        self.assertAlmostEqual(map_score, 0.0, places=2)
+        
+        # For OOD, use half seen, half unseen
+        seen_classes = list(range(n // 2))
+        ood_results = compute_ood_metrics(query_feats, gallery_feats, query_labels, gallery_labels,
+                                           seen_classes=seen_classes,
+                                           query_ids=query_ids, gallery_ids=gallery_ids)
+        self.assertAlmostEqual(ood_results['Recall@1_Seen'], 0.0, places=2)
+
 
 if __name__ == '__main__':
     import torch.nn.functional as F
