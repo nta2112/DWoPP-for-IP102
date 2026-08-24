@@ -38,8 +38,6 @@ def make_model(args, gids=None):
 
 
 def adjust_lr_exp(optimizer, base_lr, epoch, num_epochs, decay_start_epoch):
-    if epoch < 1:
-        raise Exception('Current epoch number should be no less than 1.')
     if epoch < decay_start_epoch:
         return
     for g in optimizer.param_groups:
