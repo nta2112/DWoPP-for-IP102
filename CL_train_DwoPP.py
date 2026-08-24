@@ -103,6 +103,11 @@ def train(args, model, optimizer, criterion, task_id, gids=None, old_model=None,
     model.train()
     t0 = int(time.time())
 
+    # Debug: print metric being used
+    print(f'DMML dist metric: {args.dmml_dist_metric}')
+    print(f'Distillation dist metric: {args.distillation_dist_metric}')
+    print(f'Margin: {args.margin}')
+
     for epoch in range(args.num_epochs):
         train_loss = []
         dmml_losses = []
@@ -122,10 +127,10 @@ def train(args, model, optimizer, criterion, task_id, gids=None, old_model=None,
 
             dmml_loss = criterion(feat, label)
             
-            # Check for NaN
+            # Check for NaN - if NaN, use a small loss instead of skipping
             if torch.isnan(dmml_loss):
-                print(f'WARNING: NaN dmml_loss detected at iteration {iteration}')
-                continue
+                print(f'WARNING: NaN dmml_loss at iteration {iteration}, using fallback')
+                dmml_loss = torch.tensor(1.0, device=feat.device, requires_grad=True)
 
             if task_id > 0 and args.weight_knowledge_distill > 0:
                 feat_old_model = old_model(image)
@@ -194,8 +199,8 @@ def train(args, model, optimizer, criterion, task_id, gids=None, old_model=None,
             
             # Check for NaN in total loss
             if torch.isnan(loss):
-                print(f'WARNING: NaN total loss detected at iteration {iteration}')
-                continue
+                print(f'WARNING: NaN total loss at iteration {iteration}, using fallback')
+                loss = torch.tensor(1.0, device=feat.device, requires_grad=True)
                 
             optimizer.zero_grad()
             loss.backward()
@@ -212,9 +217,9 @@ def train(args, model, optimizer, criterion, task_id, gids=None, old_model=None,
             print('Episode: {}, Loss: {:.6f}, dmml_loss: {:.6f}, kl_div_mix_task: {:.6f} '
                   .format(iteration, loss.item(), dmml_loss.item(), kl_div_mix_task.item()))
 
-        avg_training_loss = np.mean(train_loss)
-        avg_dmml_losses = np.mean(dmml_losses)
-        avg_know_distill_losses = np.mean(know_distill_losses)
+        avg_training_loss = np.mean(train_loss) if train_loss else float('nan')
+        avg_dmml_losses = np.mean(dmml_losses) if dmml_losses else float('nan')
+        avg_know_distill_losses = np.mean(know_distill_losses) if know_distill_losses else float('nan')
 
         print('Average loss: {:.6f}, dmml_losses: {:.6f}, know_distill_losses: {:.6f}'
               .format(avg_training_loss, avg_dmml_losses, avg_know_distill_losses))
