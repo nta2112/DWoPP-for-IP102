@@ -196,7 +196,8 @@ class IP102(Data.Dataset):
         if self.split == 'train':
             return sorted(set(self.train_label))
         else:
-            return sorted(set(self.train_label))
+            labels = [self[i][1] for i in range(len(self))]
+            return sorted(set(labels))
 
     def get_class_name(self, class_id):
         return self.class_names.get(class_id, str(class_id))
