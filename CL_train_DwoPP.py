@@ -79,10 +79,10 @@ def build_eval_loaders(args, task_id, seen_classes, gids=None):
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
     
-    gallery_set = IP102(args.dataset_root, eval_transform, split='val',
+    gallery_set = IP102(args.dataset_root, eval_transform, split='test',
                          filtered_class_path=args.filtered_class_path,
                          classes_txt_path=args.classes_txt_path)
-    query_set = IP102(args.dataset_root, eval_transform, split='test',
+    query_set = IP102(args.dataset_root, eval_transform, split='val',
                        filtered_class_path=args.filtered_class_path,
                        classes_txt_path=args.classes_txt_path)
     
@@ -359,11 +359,24 @@ def main():
     else:
         raise NotImplementedError(f'Dataset {args.dataset} not supported')
     
-    args.task_classes = []
-    start = 0
-    for size in task_sizes:
-        args.task_classes.append(list(range(start, start + size)))
-        start += size
+    if args.dataset == 'ip102':
+        with open(args.filtered_class_path, 'r') as filtered_file:
+            filtered_classes = [int(line.strip()) for line in filtered_file if line.strip()]
+        if len(filtered_classes) != TOTAL_TASK_NUM:
+            raise ValueError(
+                f'Expected {TOTAL_TASK_NUM} filtered classes, found {len(filtered_classes)}'
+            )
+        args.task_classes = []
+        start = 0
+        for size in task_sizes:
+            args.task_classes.append(filtered_classes[start:start + size])
+            start += size
+    else:
+        args.task_classes = []
+        start = 0
+        for size in task_sizes:
+            args.task_classes.append(list(range(start, start + size)))
+            start += size
     
     print(f'Task splits: {args.task_classes}')
 
